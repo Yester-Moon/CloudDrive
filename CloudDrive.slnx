@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/Docs/">
+    <File Path="docs/项目分析与规划.md" />
+  </Folder>
+  <Folder Name="/Test/" />
+  <Project Path="CloudDrive.Application/CloudDrive.Application.csproj" />
+  <Project Path="CloudDrive.Common/CloudDrive.Common.csproj" />
+  <Project Path="CloudDrive.Domain/CloudDrive.Domain.csproj" />
+  <Project Path="CloudDrive.Infrastructure/CloudDrive.Infrastructure.csproj" />
+  <Project Path="CloudDrive.WebApi/CloudDrive.WebApi.csproj" />
+</Solution>

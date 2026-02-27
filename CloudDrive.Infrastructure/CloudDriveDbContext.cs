@@ -67,12 +67,12 @@ namespace CloudDrive.Infrastructure
                 entity.OwnsOne(e => e.Hash, hash =>
                 {
                     hash.Property(h => h.hash).HasColumnName("Hash").HasMaxLength(64);
+                    hash.HasIndex(h => h.hash).HasDatabaseName("IX_FileItems_Hash");
                 });
 
                 // 索引配置
                 entity.HasIndex(e => e.OwnerId).HasDatabaseName("IX_FileItems_OwnerId");
                 entity.HasIndex(e => e.ParentFolderId).HasDatabaseName("IX_FileItems_ParentFolderId");
-                entity.HasIndex(e => e.Hash).HasDatabaseName("IX_FileItems_Hash");
                 entity.HasIndex(e => e.IsDeleted).HasDatabaseName("IX_FileItems_IsDeleted");
                 entity.HasIndex(e => e.CreationTime).HasDatabaseName("IX_FileItems_CreationTime");
 

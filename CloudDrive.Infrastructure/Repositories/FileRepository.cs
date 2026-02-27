@@ -22,19 +22,19 @@ namespace CloudDrive.Infrastructure.Repositories
         public async Task<FileItem?> GetByHashAsync(FileHash hash)
         {
             return await _dbContext.FileItems
-                .FirstOrDefaultAsync(f => f.Hash == hash);
+                .FirstOrDefaultAsync(f => f.Hash.hash == hash.hash);
         }
 
         public async Task<FileItem?> GetByHashAndOwnerAsync(FileHash hash, Guid ownerId)
         {
             return await _dbContext.FileItems
-                .FirstOrDefaultAsync(f => f.Hash == hash && f.OwnerId == ownerId);
+                .FirstOrDefaultAsync(f => f.Hash.hash == hash.hash && f.OwnerId == ownerId);
         }
 
         public async Task<bool> ExistsByHashAsync(FileHash hash)
         {
             return await _dbContext.FileItems
-                .AnyAsync(f => f.Hash == hash);
+                .AnyAsync(f => f.Hash.hash == hash.hash);
         }
 
         public async Task<List<FileItem>> GetByOwnerIdAsync(Guid ownerId)

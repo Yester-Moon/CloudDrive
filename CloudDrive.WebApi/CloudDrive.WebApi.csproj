@@ -4,14 +4,19 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.24" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CloudDrive.Application\CloudDrive.Application.csproj" />
     <ProjectReference Include="..\CloudDrive.Infrastructure\CloudDrive.Infrastructure.csproj" />
+    <ProjectReference Include="..\CloudDrive.Common\CloudDrive.Common.csproj" />
   </ItemGroup>
 
 </Project>

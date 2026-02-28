@@ -88,5 +88,78 @@ namespace CloudDrive.Application.Interfaces
         /// 清空回收站
         /// </summary>
         Task<int> EmptyTrashAsync(Guid userId);
+
+        #region 分片上传
+
+        /// <summary>
+        /// 初始化分片上传会话
+        /// </summary>
+        Task<ChunkUploadSessionDto> InitChunkUploadAsync(InitChunkUploadCommand command);
+
+        /// <summary>
+        /// 上传单个分片
+        /// </summary>
+        Task<ChunkUploadSessionDto> UploadChunkAsync(UploadChunkCommand command);
+
+        /// <summary>
+        /// 完成分片上传（合并分片并创建文件）
+        /// </summary>
+        Task<FileUploadResultDto> CompleteChunkUploadAsync(CompleteChunkUploadCommand command);
+
+        #endregion
+
+        #region 文件预览
+
+        /// <summary>
+        /// 获取文件预览（图片/音视频直接返回流，文本返回内容，其他返回预览信息）
+        /// </summary>
+        Task<FilePreviewResult> GetFilePreviewAsync(Guid fileId, Guid userId);
+
+        #endregion
+    }
+
+    /// <summary>
+    /// 文件预览结果
+    /// </summary>
+    public class FilePreviewResult
+    {
+        /// <summary>
+        /// 预览类型：Stream / Text / Unsupported
+        /// </summary>
+        public string PreviewType { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 文件流（图片/视频/音频/PDF场景）
+        /// </summary>
+        public Stream? FileStream { get; set; }
+
+        /// <summary>
+        /// MIME类型
+        /// </summary>
+        public string MimeType { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 文件名
+        /// </summary>
+        public string FileName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 文本内容（文本文件预览场景）
+        /// </summary>
+        public string? TextContent { get; set; }
+
+        /// <summary>
+        /// 文件扩展名
+        /// </summary>
+        public string Extension { get; set; } = string.Empty;
+
+        public static FilePreviewResult StreamPreview(Stream stream, string mimeType, string fileName, string extension)
+            => new() { PreviewType = "Stream", FileStream = stream, MimeType = mimeType, FileName = fileName, Extension = extension };
+
+        public static FilePreviewResult TextPreview(string content, string mimeType, string fileName, string extension)
+            => new() { PreviewType = "Text", TextContent = content, MimeType = mimeType, FileName = fileName, Extension = extension };
+
+        public static FilePreviewResult Unsupported(string fileName, string extension)
+            => new() { PreviewType = "Unsupported", FileName = fileName, Extension = extension };
     }
 }

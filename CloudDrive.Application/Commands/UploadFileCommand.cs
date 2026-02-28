@@ -172,4 +172,87 @@ namespace CloudDrive.Application.Commands
         /// </summary>
         public Guid UserId { get; set; }
     }
+
+    /// <summary>
+    /// 初始化分片上传命令
+    /// </summary>
+    public class InitChunkUploadCommand
+    {
+        /// <summary>
+        /// 上传者ID
+        /// </summary>
+        public Guid OwnerId { get; set; }
+
+        /// <summary>
+        /// 文件名
+        /// </summary>
+        public string FileName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// MIME类型
+        /// </summary>
+        public string MimeType { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 文件总大小（字节）
+        /// </summary>
+        public long TotalSize { get; set; }
+
+        /// <summary>
+        /// 每个分片大小（字节）
+        /// </summary>
+        public long ChunkSize { get; set; }
+
+        /// <summary>
+        /// 文件哈希（客户端预计算，可选）
+        /// </summary>
+        public string? FileHash { get; set; }
+
+        /// <summary>
+        /// 目标文件夹ID
+        /// </summary>
+        public Guid? ParentFolderId { get; set; }
+    }
+
+    /// <summary>
+    /// 上传单个分片命令
+    /// </summary>
+    public class UploadChunkCommand
+    {
+        /// <summary>
+        /// 会话ID
+        /// </summary>
+        public Guid SessionId { get; set; }
+
+        /// <summary>
+        /// 上传者ID
+        /// </summary>
+        public Guid OwnerId { get; set; }
+
+        /// <summary>
+        /// 分片索引（从0开始）
+        /// </summary>
+        public int ChunkIndex { get; set; }
+
+        /// <summary>
+        /// 分片数据流
+        /// </summary>
+        public Stream ChunkStream { get; set; } = Stream.Null;
+    }
+
+    /// <summary>
+    /// 完成分片上传命令
+    /// </summary>
+    public class CompleteChunkUploadCommand
+    {
+        /// <summary>
+        /// 会话ID
+        /// </summary>
+        public Guid SessionId { get; set; }
+
+        /// <summary>
+        /// 上传者ID
+        /// </summary>
+        public Guid OwnerId { get; set; }
+    }
 }

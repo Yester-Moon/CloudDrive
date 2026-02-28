@@ -59,6 +59,7 @@ namespace CloudDrive.Infrastructure.DependencyInjection
             services.AddScoped<IFileRepository, FileRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IShareLinkRepository, ShareLinkRepository>();
+            services.AddScoped<IChunkUploadRepository, ChunkUploadRepository>();
 
             // 工作单元
             services.AddScoped<IUnitOfWork, UnitOfWork.UnitOfWork>();

@@ -1,5 +1,6 @@
 using CloudDrive.Application.Dtos;
 using CloudDrive.Application.Interfaces;
+using CloudDrive.Common.Exceptions;
 using CloudDrive.Common.JWT;
 using CloudDrive.Domain.Entities;
 using CloudDrive.Domain.RepositoryInterfaces;
@@ -39,12 +40,12 @@ namespace CloudDrive.Application.Services
             // 检查用户名是否已存在
             var existingUser = await _userManager.FindByNameAsync(userName);
             if (existingUser != null)
-                throw new InvalidOperationException("用户名已存在");
+                throw new DuplicateException("用户名已存在");
 
             // 检查邮箱是否已存在
             var existingEmail = await _userManager.FindByEmailAsync(email);
             if (existingEmail != null)
-                throw new InvalidOperationException("邮箱已被注册");
+                throw new DuplicateException("邮箱已被注册");
 
             // 创建用户
             var user = User.Create(userName, email);
@@ -54,7 +55,7 @@ namespace CloudDrive.Application.Services
             if (!result.Succeeded)
             {
                 var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-                throw new InvalidOperationException($"注册失败：{errors}");
+                throw new BusinessException($"注册失败：{errors}");
             }
 
             return MapToDto(user);
@@ -64,14 +65,14 @@ namespace CloudDrive.Application.Services
         public async Task<(UserDto User, string Token)> LoginAsync(string userName, string password)
         {
             var user = await _userManager.FindByNameAsync(userName)
-                ?? throw new InvalidOperationException("用户名或密码错误");
+                ?? throw new InvalidCredentialsException();
 
             if (user.IsBanned)
-                throw new InvalidOperationException($"账户已被封禁：{user.BanReason}");
+                throw new UserBannedException($"账户已被封禁：{user.BanReason}");
 
             var isValid = await _userManager.CheckPasswordAsync(user, password);
             if (!isValid)
-                throw new InvalidOperationException("用户名或密码错误");
+                throw new InvalidCredentialsException();
 
             // 记录登录时间
             user.RecordLogin();
@@ -103,7 +104,7 @@ namespace CloudDrive.Application.Services
         public async Task UpdateDisplayNameAsync(Guid userId, string displayName)
         {
             var user = await _userRepository.GetByIdAsync(userId)
-                ?? throw new InvalidOperationException("用户不存在");
+                ?? throw new UserNotFoundException(userId);
 
             user.UpdateDisplayName(displayName);
             await _userRepository.UpdateAsync(user);
@@ -113,7 +114,7 @@ namespace CloudDrive.Application.Services
         public async Task UpdateAvatarAsync(Guid userId, string avatarUrl)
         {
             var user = await _userRepository.GetByIdAsync(userId)
-                ?? throw new InvalidOperationException("用户不存在");
+                ?? throw new UserNotFoundException(userId);
 
             user.UpdateAvatar(avatarUrl);
             await _userRepository.UpdateAsync(user);
@@ -142,13 +143,13 @@ namespace CloudDrive.Application.Services
         public async Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword)
         {
             var user = await _userManager.FindByIdAsync(userId.ToString())
-                ?? throw new InvalidOperationException("用户不存在");
+                ?? throw new UserNotFoundException(userId);
 
             var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
             if (!result.Succeeded)
             {
                 var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-                throw new InvalidOperationException($"修改密码失败：{errors}");
+                throw new BusinessException($"修改密码失败：{errors}");
             }
         }
 

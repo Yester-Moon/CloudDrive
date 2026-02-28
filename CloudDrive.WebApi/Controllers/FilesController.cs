@@ -298,6 +298,105 @@ namespace CloudDrive.WebApi.Controllers
             });
             return Ok(ApiResponse.Ok(new { movedCount = count }, $"成功移动 {count} 个文件"));
         }
+        #endregion
+
+        #region 分片上传
+
+        /// <summary>
+        /// 初始化分片上传会话
+        /// </summary>
+        [HttpPost("upload/chunk/init")]
+        public async Task<ActionResult<ApiResponse>> InitChunkUpload([FromBody] InitChunkUploadRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var result = await _fileService.InitChunkUploadAsync(new InitChunkUploadCommand
+            {
+                OwnerId = userId,
+                FileName = request.FileName,
+                MimeType = request.MimeType,
+                TotalSize = request.TotalSize,
+                ChunkSize = request.ChunkSize,
+                FileHash = request.FileHash,
+                ParentFolderId = request.ParentFolderId
+            });
+            return Ok(ApiResponse.Ok(result, "分片上传会话已创建"));
+        }
+
+        /// <summary>
+        /// 上传单个分片
+        /// </summary>
+        [HttpPost("upload/chunk/{sessionId}")]
+        [RequestSizeLimit(100L * 1024 * 1024)] // 单片最大100MB
+        public async Task<ActionResult<ApiResponse>> UploadChunk(
+            Guid sessionId,
+            [FromForm] int chunkIndex,
+            IFormFile chunk)
+        {
+            var userId = GetCurrentUserId();
+            var result = await _fileService.UploadChunkAsync(new UploadChunkCommand
+            {
+                SessionId = sessionId,
+                OwnerId = userId,
+                ChunkIndex = chunkIndex,
+                ChunkStream = chunk.OpenReadStream()
+            });
+            return Ok(ApiResponse.Ok(result, $"分片 {chunkIndex} 上传成功"));
+        }
+
+        /// <summary>
+        /// 完成分片上传（合并分片并创建文件）
+        /// </summary>
+        [HttpPost("upload/chunk/{sessionId}/complete")]
+        public async Task<ActionResult<ApiResponse>> CompleteChunkUpload(Guid sessionId)
+        {
+            var userId = GetCurrentUserId();
+            var result = await _fileService.CompleteChunkUploadAsync(new CompleteChunkUploadCommand
+            {
+                SessionId = sessionId,
+                OwnerId = userId
+            });
+
+            if (!result.Success)
+                return BadRequest(ApiResponse.Fail(result.ErrorMessage!));
+
+            return Ok(ApiResponse.Ok(result, "分片上传完成"));
+        }
+
+        #endregion
+
+        #region 文件预览
+
+        /// <summary>
+        /// 文件预览（图片/PDF直接流，文本返回内容，音视频直接流）
+        /// </summary>
+        [HttpGet("{id}/preview")]
+        public async Task<IActionResult> Preview(Guid id)
+        {
+            var userId = GetCurrentUserId();
+            var preview = await _fileService.GetFilePreviewAsync(id, userId);
+
+            return preview.PreviewType switch
+            {
+                "Stream" => File(preview.FileStream!, preview.MimeType, enableRangeProcessing: true),
+                "Text" => Ok(ApiResponse.Ok(new
+                {
+                    preview.FileName,
+                    preview.Extension,
+                    preview.MimeType,
+                    preview.TextContent,
+                    PreviewType = "Text"
+                })),
+                _ => Ok(ApiResponse.Ok(new
+                {
+                    preview.FileName,
+                    preview.Extension,
+                    PreviewType = "Unsupported",
+                    Message = "该文件类型不支持在线预览"
+                }))
+            };
+        }
+
+        #endregion
 
         private Guid GetCurrentUserId()
         {
@@ -305,7 +404,6 @@ namespace CloudDrive.WebApi.Controllers
             return claim != null ? Guid.Parse(claim.Value) : Guid.Empty;
         }
     }
-        #endregion
 
     #region Request Models
 
@@ -388,6 +486,39 @@ namespace CloudDrive.WebApi.Controllers
         /// 目标文件夹ID
         /// </summary>
         public Guid? TargetFolderId { get; set; }
+    }
+
+    public class InitChunkUploadRequest
+    {
+        /// <summary>
+        /// 文件名
+        /// </summary>
+        public string FileName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// MIME类型
+        /// </summary>
+        public string MimeType { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 文件总大小（字节）
+        /// </summary>
+        public long TotalSize { get; set; }
+
+        /// <summary>
+        /// 每个分片大小（字节）
+        /// </summary>
+        public long ChunkSize { get; set; }
+
+        /// <summary>
+        /// 文件哈希（客户端预计算，可选）
+        /// </summary>
+        public string? FileHash { get; set; }
+
+        /// <summary>
+        /// 目标文件夹ID
+        /// </summary>
+        public Guid? ParentFolderId { get; set; }
     }
 
     #endregion

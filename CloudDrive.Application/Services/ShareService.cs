@@ -1,6 +1,8 @@
 using CloudDrive.Application.Commands;
 using CloudDrive.Application.Dtos;
 using CloudDrive.Application.Interfaces;
+using CloudDrive.Common.Exceptions;
+using CloudDrive.Common.Interfaces;
 using CloudDrive.Domain.Entities;
 using CloudDrive.Domain.Interfaces;
 using CloudDrive.Domain.RepositoryInterfaces;
@@ -15,18 +17,21 @@ namespace CloudDrive.Application.Services
         private readonly IShareLinkRepository _shareLinkRepository;
         private readonly IFileRepository _fileRepository;
         private readonly IStorageProvider _storageProvider;
+        private readonly IMemoryCacheHelper _memoryCacheHelper;
         private readonly ShareLinkAccessService _accessService;
 
         public ShareService(
             IShareLinkRepository shareLinkRepository,
             IFileRepository fileRepository,
             IStorageProvider storageProvider,
+            IMemoryCacheHelper memoryCacheHelper,
             ShareLinkAccessService accessService)
         {
             _shareLinkRepository = shareLinkRepository;
             _fileRepository = fileRepository;
             _storageProvider = storageProvider;
             _accessService = accessService;
+            _memoryCacheHelper = memoryCacheHelper;
         }
 
         /// <inheritdoc />
@@ -34,12 +39,12 @@ namespace CloudDrive.Application.Services
         {
             // 验证文件
             var fileItem = await _fileRepository.GetByIdAsync(command.FileItemId)
-                ?? throw new InvalidOperationException("文件不存在");
+                ?? throw new FileNotExistException(command.FileItemId);
 
             // 验证创建分享权限
             var validation = _accessService.ValidateCreateShare(fileItem, command.CreatorId);
             if (!validation.IsAllowed)
-                throw new InvalidOperationException(validation.Message);
+                throw new ForbiddenException(validation.Message);
 
             // 创建分享链接
             var shareLink = ShareLink.Create(
@@ -59,7 +64,7 @@ namespace CloudDrive.Application.Services
         /// <inheritdoc />
         public async Task<ShareLinkDto?> GetShareByCodeAsync(string shareCode)
         {
-            var shareLink = await _shareLinkRepository.GetByShareCodeAsync(shareCode);
+            var shareLink =await _memoryCacheHelper.GetOrCreateAsync(shareCode,(i)=> _shareLinkRepository.GetByShareCodeAsync(shareCode));
             if (shareLink == null) return null;
 
             var fileItem = await _fileRepository.GetByIdAsync(shareLink.FileItemId);
@@ -75,12 +80,12 @@ namespace CloudDrive.Application.Services
         public async Task<FileInfoDto?> GetSharedFileAsync(string shareCode, string? password = null)
         {
             var shareLink = await _shareLinkRepository.GetByShareCodeAsync(shareCode)
-                ?? throw new InvalidOperationException("分享链接不存在");
+                ?? throw new ShareLinkInvalidException("分享链接不存在");
 
             // 验证访问权限
             var validation = _accessService.ValidateAccess(shareLink, password);
             if (!validation.IsAllowed)
-                throw new InvalidOperationException(validation.Message);
+                throw new ShareLinkInvalidException(validation.Message);
 
             var fileItem = await _fileRepository.GetByIdAsync(shareLink.FileItemId);
             if (fileItem == null) return null;
@@ -107,15 +112,15 @@ namespace CloudDrive.Application.Services
             string shareCode, string? password = null)
         {
             var shareLink = await _shareLinkRepository.GetByShareCodeAsync(shareCode)
-                ?? throw new InvalidOperationException("分享链接不存在");
+                ?? throw new ShareLinkInvalidException("分享链接不存在");
 
             // 验证下载权限
             var validation = _accessService.ValidateDownload(shareLink, password);
             if (!validation.IsAllowed)
-                throw new InvalidOperationException(validation.Message);
+                throw new ShareLinkInvalidException(validation.Message);
 
             var fileItem = await _fileRepository.GetByIdAsync(shareLink.FileItemId)
-                ?? throw new InvalidOperationException("分享的文件已被删除");
+                ?? throw new FileNotExistException("分享的文件已被删除");
 
             // 增加下载次数
             shareLink.IncrementDownloadCount();
@@ -148,12 +153,12 @@ namespace CloudDrive.Application.Services
         public async Task CancelShareAsync(CancelShareCommand command)
         {
             var shareLink = await _shareLinkRepository.GetByIdAsync(command.ShareLinkId)
-                ?? throw new InvalidOperationException("分享链接不存在");
+                ?? throw new ShareLinkInvalidException("分享链接不存在");
 
             // 验证所有者权限
             var validation = _accessService.ValidateOwnership(shareLink, command.UserId);
             if (!validation.IsAllowed)
-                throw new UnauthorizedAccessException(validation.Message);
+                throw new ForbiddenException(validation.Message);
 
             shareLink.Cancel();
             await _shareLinkRepository.UpdateAsync(shareLink);

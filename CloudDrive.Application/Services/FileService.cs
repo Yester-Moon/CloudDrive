@@ -3,6 +3,9 @@ using CloudDrive.Application.Dtos;
 using CloudDrive.Application.Interfaces;
 using CloudDrive.Application.Queries;
 using CloudDrive.Application.Validators;
+using CloudDrive.Common.Constants;
+using CloudDrive.Common.Exceptions;
+using CloudDrive.Common.Interfaces;
 using CloudDrive.Domain.Entities;
 using CloudDrive.Domain.Interfaces;
 using CloudDrive.Domain.RepositoryInterfaces;
@@ -17,7 +20,9 @@ namespace CloudDrive.Application.Services
     {
         private readonly IFileRepository _fileRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IChunkUploadRepository _chunkUploadRepository;
         private readonly IStorageProvider _storageProvider;
+        private readonly IMemoryCacheHelper _memoryCacheHelper;
         private readonly FileDeduplicationService _deduplicationService;
         private readonly FileUploadValidator _uploadValidator;
         private readonly QuotaService _quotaService;
@@ -25,17 +30,21 @@ namespace CloudDrive.Application.Services
         public FileService(
             IFileRepository fileRepository,
             IUserRepository userRepository,
+            IChunkUploadRepository chunkUploadRepository,
             IStorageProvider storageProvider,
             FileDeduplicationService deduplicationService,
             FileUploadValidator uploadValidator,
-            QuotaService quotaService)
+            QuotaService quotaService,
+            IMemoryCacheHelper memoryCacheHelper)
         {
             _fileRepository = fileRepository;
             _userRepository = userRepository;
+            _chunkUploadRepository = chunkUploadRepository;
             _storageProvider = storageProvider;
             _deduplicationService = deduplicationService;
             _uploadValidator = uploadValidator;
             _quotaService = quotaService;
+            _memoryCacheHelper = memoryCacheHelper;
         }
 
         /// <inheritdoc />
@@ -136,13 +145,13 @@ namespace CloudDrive.Application.Services
         public async Task<(Stream FileStream, string FileName, string MimeType)> DownloadFileAsync(Guid fileId, Guid userId)
         {
             var fileItem = await _fileRepository.GetByIdAsync(fileId)
-                ?? throw new InvalidOperationException("文件不存在");
+                ?? throw new FileNotExistException(fileId);
 
             if (fileItem.OwnerId != userId)
-                throw new UnauthorizedAccessException("无权下载此文件");
+                throw new ForbiddenException("无权下载此文件");
 
             if (fileItem.IsFolder)
-                throw new InvalidOperationException("文件夹不支持下载");
+                throw new BusinessException("文件夹不支持下载", ErrorCodes.OperationNotAllowed);
 
             var stream = await _storageProvider.DownloadAsync(fileItem.StoragePath);
 
@@ -156,7 +165,7 @@ namespace CloudDrive.Application.Services
         /// <inheritdoc />
         public async Task<FileInfoDto?> GetFileInfoAsync(Guid fileId, Guid userId)
         {
-            var fileItem = await _fileRepository.GetByIdAsync(fileId);
+            var fileItem =await _memoryCacheHelper.GetOrCreateAsync(fileId.ToString(),(i)=>{return _fileRepository.GetByIdAsync(fileId); });
             if (fileItem == null || fileItem.OwnerId != userId)
                 return null;
 
@@ -230,10 +239,10 @@ namespace CloudDrive.Application.Services
         public async Task DeleteFileAsync(DeleteFileCommand command)
         {
             var fileItem = await _fileRepository.GetByIdAsync(command.FileId)
-                ?? throw new InvalidOperationException("文件不存在");
+                ?? throw new FileNotExistException(command.FileId);
 
             if (fileItem.OwnerId != command.UserId)
-                throw new UnauthorizedAccessException("无权删除此文件");
+                throw new ForbiddenException("无权删除此文件");
 
             // 软删除
             fileItem.SoftDelete();
@@ -252,10 +261,10 @@ namespace CloudDrive.Application.Services
         public async Task<FileInfoDto> RenameFileAsync(RenameFileCommand command)
         {
             var fileItem = await _fileRepository.GetByIdAsync(command.FileId)
-                ?? throw new InvalidOperationException("文件不存在");
+                ?? throw new FileNotExistException(command.FileId);
 
             if (fileItem.OwnerId != command.UserId)
-                throw new UnauthorizedAccessException("无权重命名此文件");
+                throw new ForbiddenException("无权重命名此文件");
 
             fileItem.Rename(command.NewName);
             await _fileRepository.UpdateAsync(fileItem);
@@ -267,22 +276,22 @@ namespace CloudDrive.Application.Services
         public async Task MoveFileAsync(MoveFileCommand command)
         {
             var fileItem = await _fileRepository.GetByIdAsync(command.FileId)
-                ?? throw new InvalidOperationException("文件不存在");
+                ?? throw new FileNotExistException(command.FileId);
 
             if (fileItem.OwnerId != command.UserId)
-                throw new UnauthorizedAccessException("无权移动此文件");
+                throw new ForbiddenException("无权移动此文件");
 
             // 验证目标文件夹
             if (command.TargetFolderId.HasValue)
             {
                 var targetFolder = await _fileRepository.GetByIdAsync(command.TargetFolderId.Value)
-                    ?? throw new InvalidOperationException("目标文件夹不存在");
+                    ?? throw new FileNotExistException("目标文件夹不存在");
 
                 if (!targetFolder.IsFolder)
-                    throw new InvalidOperationException("目标不是文件夹");
+                    throw new BusinessException("目标不是文件夹", ErrorCodes.OperationNotAllowed);
 
                 if (targetFolder.OwnerId != command.UserId)
-                    throw new UnauthorizedAccessException("无权操作目标文件夹");
+                    throw new ForbiddenException("无权操作目标文件夹");
             }
 
             fileItem.MoveTo(command.TargetFolderId);
@@ -293,17 +302,17 @@ namespace CloudDrive.Application.Services
         public async Task<FileInfoDto> CopyFileAsync(Guid fileId, Guid userId, Guid? targetFolderId)
         {
             var fileItem = await _fileRepository.GetByIdAsync(fileId)
-                ?? throw new InvalidOperationException("文件不存在");
+                ?? throw new FileNotExistException(fileId);
 
             if (fileItem.OwnerId != userId)
-                throw new UnauthorizedAccessException("无权复制此文件");
+                throw new ForbiddenException("无权复制此文件");
 
             if (fileItem.IsFolder)
-                throw new InvalidOperationException("暂不支持复制文件夹");
+                throw new BusinessException("暂不支持复制文件夹", ErrorCodes.OperationNotAllowed);
 
             // 检查配额
             if (!await _quotaService.HasSufficientQuotaAsync(userId, fileItem.Size.bytesize))
-                throw new InvalidOperationException("存储空间不足");
+                throw new QuotaExceededException("存储空间不足");
 
             // 创建副本（复用存储路径）
             var copy = FileItem.CreateFile(
@@ -368,13 +377,13 @@ namespace CloudDrive.Application.Services
             if (command.TargetFolderId.HasValue)
             {
                 var targetFolder = await _fileRepository.GetByIdAsync(command.TargetFolderId.Value)
-                    ?? throw new InvalidOperationException("目标文件夹不存在");
+                    ?? throw new FileNotExistException("目标文件夹不存在");
 
                 if (!targetFolder.IsFolder)
-                    throw new InvalidOperationException("目标不是文件夹");
+                    throw new BusinessException("目标不是文件夹", ErrorCodes.OperationNotAllowed);
 
                 if (targetFolder.OwnerId != command.UserId)
-                    throw new UnauthorizedAccessException("无权操作目标文件夹");
+                    throw new ForbiddenException("无权操作目标文件夹");
             }
 
             var fileItems = await _fileRepository.GetByIdsAsync(command.FileIds);
@@ -407,16 +416,16 @@ namespace CloudDrive.Application.Services
         public async Task<FileInfoDto> RestoreFileAsync(RestoreFileCommand command)
         {
             var fileItem = await _fileRepository.GetDeletedByIdAsync(command.FileId)
-                ?? throw new InvalidOperationException("文件不存在或未被删除");
+                ?? throw new FileNotExistException("文件不存在或未被删除");
 
             if (fileItem.OwnerId != command.UserId)
-                throw new UnauthorizedAccessException("无权恢复此文件");
+                throw new ForbiddenException("无权恢复此文件");
 
             // 检查配额（恢复文件需要重新占用空间）
             if (!fileItem.IsFolder)
             {
                 if (!await _quotaService.HasSufficientQuotaAsync(command.UserId, fileItem.Size.bytesize))
-                    throw new InvalidOperationException("存储空间不足，无法恢复文件");
+                    throw new QuotaExceededException("存储空间不足，无法恢复文件");
             }
 
             fileItem.Restore();
@@ -450,6 +459,181 @@ namespace CloudDrive.Application.Services
 
             return items.Count;
         }
+
+        #region 分片上传
+
+        /// <inheritdoc />
+        public async Task<ChunkUploadSessionDto> InitChunkUploadAsync(InitChunkUploadCommand command)
+        {
+            // 检查配额
+            if (!await _quotaService.HasSufficientQuotaAsync(command.OwnerId, command.TotalSize))
+                throw new QuotaExceededException("存储空间不足，无法启动上传");
+
+            var session = ChunkUploadSession.Create(
+                command.OwnerId,
+                command.FileName,
+                command.MimeType,
+                command.TotalSize,
+                command.ChunkSize,
+                command.FileHash,
+                command.ParentFolderId);
+
+            await _chunkUploadRepository.AddAsync(session);
+
+            return MapSessionToDto(session);
+        }
+
+        /// <inheritdoc />
+        public async Task<ChunkUploadSessionDto> UploadChunkAsync(UploadChunkCommand command)
+        {
+            var session = await _chunkUploadRepository.GetByIdAsync(command.SessionId)
+                ?? throw new FileNotExistException("分片上传会话不存在");
+
+            if (session.OwnerId != command.OwnerId)
+                throw new ForbiddenException("无权操作此上传会话");
+
+            if (session.IsExpired())
+                throw new BusinessException("上传会话已过期，请重新发起上传", ErrorCodes.OperationNotAllowed);
+
+            // 保存分片到临时目录
+            var chunkPath = new FilePath($"{session.TempDirectory}/{command.ChunkIndex}");
+            await _storageProvider.UploadAsync(command.ChunkStream, $"{command.ChunkIndex}", "application/octet-stream");
+
+            // 更新会话状态
+            session.MarkChunkUploaded(command.ChunkIndex);
+            await _chunkUploadRepository.UpdateAsync(session);
+
+            return MapSessionToDto(session);
+        }
+
+        /// <inheritdoc />
+        public async Task<FileUploadResultDto> CompleteChunkUploadAsync(CompleteChunkUploadCommand command)
+        {
+            var session = await _chunkUploadRepository.GetByIdAsync(command.SessionId)
+                ?? throw new FileNotExistException("分片上传会话不存在");
+
+            if (session.OwnerId != command.OwnerId)
+                throw new ForbiddenException("无权操作此上传会话");
+
+            if (!session.IsAllChunksUploaded())
+                throw new BusinessException(
+                    $"分片未全部上传（{session.UploadedChunks}/{session.TotalChunks}）",
+                    ErrorCodes.FileUploadFailed);
+
+            // 按顺序合并分片
+            using var mergedStream = new MemoryStream();
+            for (var i = 0; i < session.TotalChunks; i++)
+            {
+                var chunkPath = new FilePath($"{session.TempDirectory}/{i}");
+                await using var chunkStream = await _storageProvider.DownloadAsync(chunkPath);
+                await chunkStream.CopyToAsync(mergedStream);
+            }
+            mergedStream.Position = 0;
+
+            // 计算合并后哈希
+            var hash = await _storageProvider.ComputeHashAsync(mergedStream);
+            mergedStream.Position = 0;
+
+            // 如果客户端提供了哈希，做校验
+            if (!string.IsNullOrWhiteSpace(session.FileHash) && hash.hash != session.FileHash)
+                throw new BusinessException("文件哈希校验失败，数据可能已损坏", ErrorCodes.FileHashMismatch);
+
+            // 上传合并后的完整文件
+            var storagePath = await _storageProvider.UploadAsync(mergedStream, session.FileName, session.MimeType);
+
+            // 创建文件实体
+            var fileItem = FileItem.CreateFile(
+                session.FileName,
+                new FileSize(session.TotalSize),
+                storagePath,
+                hash,
+                session.MimeType,
+                session.OwnerId,
+                session.ParentFolderId);
+
+            await _fileRepository.AddAsync(fileItem);
+
+            // 更新用户已用空间
+            var owner = await _userRepository.GetByIdAsync(session.OwnerId);
+            owner!.IncreaseUsedSpace(session.TotalSize);
+            await _userRepository.UpdateAsync(owner);
+
+            // 清理分片临时文件
+            for (var i = 0; i < session.TotalChunks; i++)
+            {
+                var chunkPath = new FilePath($"{session.TempDirectory}/{i}");
+                await _storageProvider.DeleteAsync(chunkPath);
+            }
+
+            // 标记会话完成
+            session.MarkCompleted();
+            await _chunkUploadRepository.UpdateAsync(session);
+
+            return FileUploadResultDto.Ok(fileItem.Id, session.FileName, session.TotalSize);
+        }
+
+        private static ChunkUploadSessionDto MapSessionToDto(ChunkUploadSession session)
+        {
+            return new ChunkUploadSessionDto
+            {
+                SessionId = session.Id,
+                FileName = session.FileName,
+                TotalSize = session.TotalSize,
+                ChunkSize = session.ChunkSize,
+                TotalChunks = session.TotalChunks,
+                UploadedChunks = session.UploadedChunks,
+                UploadedChunkIndices = [.. session.GetUploadedIndicesSet().OrderBy(i => i)],
+                Status = session.Status,
+                ExpiresAt = session.ExpiresAt
+            };
+        }
+
+        #endregion
+
+        #region 文件预览
+
+        /// <inheritdoc />
+        public async Task<FilePreviewResult> GetFilePreviewAsync(Guid fileId, Guid userId)
+        {
+            var fileItem = await _fileRepository.GetByIdAsync(fileId)
+                ?? throw new FileNotExistException(fileId);
+
+            if (fileItem.OwnerId != userId)
+                throw new ForbiddenException("无权预览此文件");
+
+            if (fileItem.IsFolder)
+                throw new BusinessException("文件夹不支持预览", ErrorCodes.OperationNotAllowed);
+
+            var ext = fileItem.Extension.ToLowerInvariant();
+
+            // 图片 / PDF — 直接返回文件流
+            if (FileTypeConstants.PreviewableImageExtensions.Contains(ext) || ext == ".pdf")
+            {
+                var stream = await _storageProvider.DownloadAsync(fileItem.StoragePath);
+                return FilePreviewResult.StreamPreview(stream, fileItem.MimeType, fileItem.Name, ext);
+            }
+
+            // 音视频 — 直接返回文件流
+            if (FileTypeConstants.PreviewableVideoExtensions.Contains(ext)
+                || FileTypeConstants.PreviewableAudioExtensions.Contains(ext))
+            {
+                var stream = await _storageProvider.DownloadAsync(fileItem.StoragePath);
+                return FilePreviewResult.StreamPreview(stream, fileItem.MimeType, fileItem.Name, ext);
+            }
+
+            // 文本 — 读取内容返回
+            if (FileTypeConstants.PreviewableTextExtensions.Contains(ext))
+            {
+                await using var stream = await _storageProvider.DownloadAsync(fileItem.StoragePath);
+                using var reader = new StreamReader(stream);
+                var content = await reader.ReadToEndAsync();
+                return FilePreviewResult.TextPreview(content, fileItem.MimeType, fileItem.Name, ext);
+            }
+
+            return FilePreviewResult.Unsupported(fileItem.Name, ext);
+        }
+
+        #endregion
 
         /// <summary>
         /// 将FileItem实体映射为DTO

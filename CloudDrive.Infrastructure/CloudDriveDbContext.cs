@@ -17,6 +17,7 @@ namespace CloudDrive.Infrastructure
 
         public DbSet<FileItem> FileItems { get; set; }
         public DbSet<ShareLink> ShareLinks { get; set; }
+        public DbSet<ChunkUploadSession> ChunkUploadSessions { get; set; }
 
         public CloudDriveDbContext(DbContextOptions<CloudDriveDbContext> options, IMediator? mediator = null)
             : base(options)
@@ -122,6 +123,24 @@ namespace CloudDrive.Infrastructure
 
                 // 查询过滤器
                 entity.HasQueryFilter(e => !e.IsDeleted);
+            });
+
+            // 配置 ChunkUploadSession 实体
+            modelBuilder.Entity<ChunkUploadSession>(entity =>
+            {
+                entity.ToTable("ChunkUploadSessions");
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.MimeType).HasMaxLength(100);
+                entity.Property(e => e.FileHash).HasMaxLength(64);
+                entity.Property(e => e.TempDirectory).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(20);
+                entity.Property(e => e.UploadedChunkIndices).HasMaxLength(4000);
+
+                entity.HasIndex(e => e.OwnerId).HasDatabaseName("IX_ChunkUploadSessions_OwnerId");
+                entity.HasIndex(e => e.Status).HasDatabaseName("IX_ChunkUploadSessions_Status");
+                entity.HasIndex(e => e.ExpiresAt).HasDatabaseName("IX_ChunkUploadSessions_ExpiresAt");
             });
 
             // 配置 User 实体

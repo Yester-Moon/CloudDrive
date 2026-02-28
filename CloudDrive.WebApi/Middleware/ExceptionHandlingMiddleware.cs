@@ -1,3 +1,4 @@
+using CloudDrive.Common.Exceptions;
 using CloudDrive.WebApi.Models;
 using System.Net;
 using System.Text.Json;
@@ -32,8 +33,11 @@ namespace CloudDrive.WebApi.Middleware
 
         private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
+            int businessErrorCode = 0;
+
             var (statusCode, message) = exception switch
             {
+                BusinessException bex => (MapBusinessErrorCode(bex.ErrorCode, out businessErrorCode), bex.Message),
                 UnauthorizedAccessException => (HttpStatusCode.Forbidden, exception.Message),
                 InvalidOperationException => (HttpStatusCode.BadRequest, exception.Message),
                 ArgumentException => (HttpStatusCode.BadRequest, exception.Message),
@@ -54,13 +58,31 @@ namespace CloudDrive.WebApi.Middleware
             context.Response.ContentType = "application/json; charset=utf-8";
             context.Response.StatusCode = (int)statusCode;
 
-            var response = ApiResponse.Fail(message, (int)statusCode);
+            var responseCode = businessErrorCode > 0 ? businessErrorCode : (int)statusCode;
+            var response = ApiResponse.Fail(message, responseCode);
             var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
 
             await context.Response.WriteAsync(json);
+        }
+
+        /// <summary>
+        /// 将业务错误码映射到 HTTP 状态码
+        /// </summary>
+        private static HttpStatusCode MapBusinessErrorCode(int errorCode, out int businessCode)
+        {
+            businessCode = errorCode;
+            return errorCode switch
+            {
+                >= 40100 and < 40200 => HttpStatusCode.Unauthorized,
+                >= 40300 and < 40400 => HttpStatusCode.Forbidden,
+                >= 40400 and < 40500 => HttpStatusCode.NotFound,
+                >= 40000 and < 40100 or >= 41000 and < 43000 => HttpStatusCode.BadRequest,
+                >= 50000 => HttpStatusCode.InternalServerError,
+                _ => HttpStatusCode.BadRequest
+            };
         }
     }
 }

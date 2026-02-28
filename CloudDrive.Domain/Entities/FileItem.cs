@@ -228,6 +228,28 @@ namespace CloudDrive.Domain.Entities
         }
 
         /// <summary>
+        /// 从回收站恢复文件
+        /// </summary>
+        public override void Restore()
+        {
+            if (!IsDeleted)
+                throw new InvalidOperationException("文件未被删除，无法恢复");
+
+            base.Restore();
+        }
+
+        /// <summary>
+        /// 批量移动到新文件夹（静态辅助方法，供服务层调用）
+        /// </summary>
+        public static void BatchMoveTo(IEnumerable<FileItem> items, Guid? newParentFolderId)
+        {
+            foreach (var item in items)
+            {
+                item.MoveTo(newParentFolderId);
+            }
+        }
+
+        /// <summary>
         /// 验证文件类型是否允许
         /// </summary>
         public bool IsAllowedFileType(string[] allowedExtensions)

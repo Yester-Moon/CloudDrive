@@ -13,6 +13,16 @@ namespace CloudDrive.Common.Models
             this.DeletionTime = DateTime.Now;
         }
 
+        /// <summary>
+        /// 从软删除状态恢复
+        /// </summary>
+        public virtual void Restore()
+        {
+            this.IsDeleted = false;
+            this.DeletionTime = null;
+            this.LastModificationTime = DateTime.Now;
+        }
+
         public void NotifyModified()
         {
             this.LastModificationTime = DateTime.Now;

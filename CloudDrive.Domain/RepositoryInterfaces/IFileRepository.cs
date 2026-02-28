@@ -88,5 +88,28 @@ namespace CloudDrive.Domain.RepositoryInterfaces
         /// 按文件类型筛选
         /// </summary>
         Task<List<FileItem>> GetByExtensionsAsync(Guid ownerId, string[] extensions);
+
+        /// <summary>
+        /// 根据多个ID批量获取文件
+        /// </summary>
+        Task<List<FileItem>> GetByIdsAsync(IEnumerable<Guid> ids);
+
+        /// <summary>
+        /// 获取用户回收站中的已删除文件（分页）
+        /// </summary>
+        Task<(List<FileItem> Items, int TotalCount)> GetDeletedByOwnerAsync(
+            Guid ownerId,
+            int pageIndex,
+            int pageSize);
+
+        /// <summary>
+        /// 根据ID获取已删除的文件（忽略全局查询过滤器）
+        /// </summary>
+        Task<FileItem?> GetDeletedByIdAsync(Guid id);
+
+        /// <summary>
+        /// 批量更新文件
+        /// </summary>
+        Task UpdateRangeAsync(IEnumerable<FileItem> fileItems);
     }
 }

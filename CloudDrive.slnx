@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/Docs/">
+    <File Path="docs/API文档.md" />
+    <File Path="docs/开发规划.md" />
     <File Path="docs/项目分析与规划.md" />
   </Folder>
   <Folder Name="/Test/" />

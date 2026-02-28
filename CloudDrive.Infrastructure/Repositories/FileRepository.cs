@@ -150,5 +150,46 @@ namespace CloudDrive.Infrastructure.Repositories
                 .OrderByDescending(f => f.CreationTime)
                 .ToListAsync();
         }
+
+        public async Task<List<FileItem>> GetByIdsAsync(IEnumerable<Guid> ids)
+        {
+            var idList = ids.ToList();
+            return await _dbContext.FileItems
+                .Where(f => idList.Contains(f.Id))
+                .ToListAsync();
+        }
+
+        public async Task<(List<FileItem> Items, int TotalCount)> GetDeletedByOwnerAsync(
+            Guid ownerId,
+            int pageIndex,
+            int pageSize)
+        {
+            var query = _dbContext.FileItems
+                .IgnoreQueryFilters()
+                .Where(f => f.OwnerId == ownerId && f.IsDeleted);
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(f => f.DeletionTime)
+                .Skip((pageIndex - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
+        public async Task<FileItem?> GetDeletedByIdAsync(Guid id)
+        {
+            return await _dbContext.FileItems
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(f => f.Id == id && f.IsDeleted);
+        }
+
+        public async Task UpdateRangeAsync(IEnumerable<FileItem> fileItems)
+        {
+            _dbContext.FileItems.UpdateRange(fileItems);
+            await _dbContext.SaveChangesAsync();
+        }
     }
 }

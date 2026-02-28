@@ -325,6 +325,132 @@ namespace CloudDrive.Application.Services
             return MapToDto(copy);
         }
 
+        /// <inheritdoc />
+        public async Task<int> BatchDeleteAsync(BatchDeleteCommand command)
+        {
+            if (command.FileIds.Count == 0)
+                return 0;
+
+            var fileItems = await _fileRepository.GetByIdsAsync(command.FileIds);
+            var ownedItems = fileItems.Where(f => f.OwnerId == command.UserId).ToList();
+
+            if (ownedItems.Count == 0)
+                return 0;
+
+            long totalFreedBytes = 0;
+            foreach (var item in ownedItems)
+            {
+                item.SoftDelete();
+                if (!item.IsFolder)
+                    totalFreedBytes += item.Size.bytesize;
+            }
+
+            await _fileRepository.UpdateRangeAsync(ownedItems);
+
+            // 释放用户空间
+            if (totalFreedBytes > 0)
+            {
+                var user = await _userRepository.GetByIdAsync(command.UserId);
+                user!.DecreaseUsedSpace(totalFreedBytes);
+                await _userRepository.UpdateAsync(user);
+            }
+
+            return ownedItems.Count;
+        }
+
+        /// <inheritdoc />
+        public async Task<int> BatchMoveAsync(BatchMoveCommand command)
+        {
+            if (command.FileIds.Count == 0)
+                return 0;
+
+            // 验证目标文件夹
+            if (command.TargetFolderId.HasValue)
+            {
+                var targetFolder = await _fileRepository.GetByIdAsync(command.TargetFolderId.Value)
+                    ?? throw new InvalidOperationException("目标文件夹不存在");
+
+                if (!targetFolder.IsFolder)
+                    throw new InvalidOperationException("目标不是文件夹");
+
+                if (targetFolder.OwnerId != command.UserId)
+                    throw new UnauthorizedAccessException("无权操作目标文件夹");
+            }
+
+            var fileItems = await _fileRepository.GetByIdsAsync(command.FileIds);
+            var ownedItems = fileItems.Where(f => f.OwnerId == command.UserId).ToList();
+
+            if (ownedItems.Count == 0)
+                return 0;
+
+            FileItem.BatchMoveTo(ownedItems, command.TargetFolderId);
+            await _fileRepository.UpdateRangeAsync(ownedItems);
+
+            return ownedItems.Count;
+        }
+
+        /// <inheritdoc />
+        public async Task<FileListDto> GetTrashListAsync(Guid userId, int pageIndex, int pageSize)
+        {
+            var (items, totalCount) = await _fileRepository.GetDeletedByOwnerAsync(userId, pageIndex, pageSize);
+
+            return new FileListDto
+            {
+                Items = items.Select(MapToDto).ToList(),
+                TotalCount = totalCount,
+                PageIndex = pageIndex,
+                PageSize = pageSize
+            };
+        }
+
+        /// <inheritdoc />
+        public async Task<FileInfoDto> RestoreFileAsync(RestoreFileCommand command)
+        {
+            var fileItem = await _fileRepository.GetDeletedByIdAsync(command.FileId)
+                ?? throw new InvalidOperationException("文件不存在或未被删除");
+
+            if (fileItem.OwnerId != command.UserId)
+                throw new UnauthorizedAccessException("无权恢复此文件");
+
+            // 检查配额（恢复文件需要重新占用空间）
+            if (!fileItem.IsFolder)
+            {
+                if (!await _quotaService.HasSufficientQuotaAsync(command.UserId, fileItem.Size.bytesize))
+                    throw new InvalidOperationException("存储空间不足，无法恢复文件");
+            }
+
+            fileItem.Restore();
+            await _fileRepository.UpdateAsync(fileItem);
+
+            // 恢复用户已用空间
+            if (!fileItem.IsFolder)
+            {
+                var user = await _userRepository.GetByIdAsync(command.UserId);
+                user!.IncreaseUsedSpace(fileItem.Size.bytesize);
+                await _userRepository.UpdateAsync(user);
+            }
+
+            return MapToDto(fileItem);
+        }
+
+        /// <inheritdoc />
+        public async Task<int> EmptyTrashAsync(Guid userId)
+        {
+            // 获取所有回收站文件（获取全部，不分页）
+            var (items, _) = await _fileRepository.GetDeletedByOwnerAsync(userId, 1, int.MaxValue);
+
+            if (items.Count == 0)
+                return 0;
+
+            // 永久删除
+            foreach (var item in items)
+            {
+                await _fileRepository.DeleteAsync(item);
+            }
+
+            return items.Count;
+        }
+
         /// <summary>
         /// 将FileItem实体映射为DTO
         /// </summary>

@@ -119,4 +119,57 @@ namespace CloudDrive.Application.Commands
         /// </summary>
         public Guid UserId { get; set; }
     }
+
+    /// <summary>
+    /// 批量删除文件命令
+    /// </summary>
+    public class BatchDeleteCommand
+    {
+        /// <summary>
+        /// 文件ID列表
+        /// </summary>
+        public List<Guid> FileIds { get; set; } = [];
+
+        /// <summary>
+        /// 操作者ID
+        /// </summary>
+        public Guid UserId { get; set; }
+    }
+
+    /// <summary>
+    /// 批量移动文件命令
+    /// </summary>
+    public class BatchMoveCommand
+    {
+        /// <summary>
+        /// 文件ID列表
+        /// </summary>
+        public List<Guid> FileIds { get; set; } = [];
+
+        /// <summary>
+        /// 操作者ID
+        /// </summary>
+        public Guid UserId { get; set; }
+
+        /// <summary>
+        /// 目标文件夹ID
+        /// </summary>
+        public Guid? TargetFolderId { get; set; }
+    }
+
+    /// <summary>
+    /// 恢复文件命令（从回收站恢复）
+    /// </summary>
+    public class RestoreFileCommand
+    {
+        /// <summary>
+        /// 文件ID
+        /// </summary>
+        public Guid FileId { get; set; }
+
+        /// <summary>
+        /// 操作者ID
+        /// </summary>
+        public Guid UserId { get; set; }
+    }
 }

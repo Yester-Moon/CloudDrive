@@ -227,6 +227,76 @@ namespace CloudDrive.WebApi.Controllers
             return Ok(ApiResponse.Ok(result, "文件夹创建成功"));
         }
 
+        /// <summary>
+        /// 获取回收站文件列表
+        /// </summary>
+        [HttpGet("trash")]
+        public async Task<ActionResult<ApiResponse>> GetTrashList(
+            [FromQuery] int pageIndex = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var userId = GetCurrentUserId();
+            var result = await _fileService.GetTrashListAsync(userId, pageIndex, pageSize);
+            return Ok(ApiResponse.Ok(result));
+        }
+
+        /// <summary>
+        /// 从回收站恢复文件
+        /// </summary>
+        [HttpPost("{id}/restore")]
+        public async Task<ActionResult<ApiResponse>> Restore(Guid id)
+        {
+            var userId = GetCurrentUserId();
+            var result = await _fileService.RestoreFileAsync(new RestoreFileCommand
+            {
+                FileId = id,
+                UserId = userId
+            });
+            return Ok(ApiResponse.Ok(result, "文件恢复成功"));
+        }
+
+        /// <summary>
+        /// 清空回收站
+        /// </summary>
+        [HttpDelete("trash")]
+        public async Task<ActionResult<ApiResponse>> EmptyTrash()
+        {
+            var userId = GetCurrentUserId();
+            var count = await _fileService.EmptyTrashAsync(userId);
+            return Ok(ApiResponse.Ok(new { deletedCount = count }, $"已永久删除 {count} 个文件"));
+        }
+
+        /// <summary>
+        /// 批量删除文件
+        /// </summary>
+        [HttpPost("batch/delete")]
+        public async Task<ActionResult<ApiResponse>> BatchDelete([FromBody] BatchDeleteRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var count = await _fileService.BatchDeleteAsync(new BatchDeleteCommand
+            {
+                FileIds = request.FileIds,
+                UserId = userId
+            });
+            return Ok(ApiResponse.Ok(new { deletedCount = count }, $"成功删除 {count} 个文件"));
+        }
+
+        /// <summary>
+        /// 批量移动文件
+        /// </summary>
+        [HttpPost("batch/move")]
+        public async Task<ActionResult<ApiResponse>> BatchMove([FromBody] BatchMoveRequest request)
+        {
+            var userId = GetCurrentUserId();
+            var count = await _fileService.BatchMoveAsync(new BatchMoveCommand
+            {
+                FileIds = request.FileIds,
+                UserId = userId,
+                TargetFolderId = request.TargetFolderId
+            });
+            return Ok(ApiResponse.Ok(new { movedCount = count }, $"成功移动 {count} 个文件"));
+        }
+
         private Guid GetCurrentUserId()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -294,6 +364,27 @@ namespace CloudDrive.WebApi.Controllers
         /// 父文件夹ID
         /// </summary>
         public Guid? ParentFolderId { get; set; }
+    }
+
+    public class BatchDeleteRequest
+    {
+        /// <summary>
+        /// 要删除的文件ID列表
+        /// </summary>
+        public List<Guid> FileIds { get; set; } = [];
+    }
+
+    public class BatchMoveRequest
+    {
+        /// <summary>
+        /// 要移动的文件ID列表
+        /// </summary>
+        public List<Guid> FileIds { get; set; } = [];
+
+        /// <summary>
+        /// 目标文件夹ID
+        /// </summary>
+        public Guid? TargetFolderId { get; set; }
     }
 
     #endregion

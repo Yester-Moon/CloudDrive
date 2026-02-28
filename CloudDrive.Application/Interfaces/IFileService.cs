@@ -63,5 +63,30 @@ namespace CloudDrive.Application.Interfaces
         /// 复制文件
         /// </summary>
         Task<FileInfoDto> CopyFileAsync(Guid fileId, Guid userId, Guid? targetFolderId);
+
+        /// <summary>
+        /// 批量删除文件（软删除）
+        /// </summary>
+        Task<int> BatchDeleteAsync(BatchDeleteCommand command);
+
+        /// <summary>
+        /// 批量移动文件
+        /// </summary>
+        Task<int> BatchMoveAsync(BatchMoveCommand command);
+
+        /// <summary>
+        /// 获取回收站文件列表（分页）
+        /// </summary>
+        Task<FileListDto> GetTrashListAsync(Guid userId, int pageIndex, int pageSize);
+
+        /// <summary>
+        /// 从回收站恢复文件
+        /// </summary>
+        Task<FileInfoDto> RestoreFileAsync(RestoreFileCommand command);
+
+        /// <summary>
+        /// 清空回收站
+        /// </summary>
+        Task<int> EmptyTrashAsync(Guid userId);
     }
 }

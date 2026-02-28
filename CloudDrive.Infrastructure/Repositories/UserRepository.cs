@@ -30,10 +30,10 @@ namespace CloudDrive.Infrastructure.Repositories
             return await _dbContext.Users.AnyAsync(u => u.Id == id);
         }
 
-        public async Task UpdateAsync(User user)
+        public Task UpdateAsync(User user)
         {
             _dbContext.Users.Update(user);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
     }
 }

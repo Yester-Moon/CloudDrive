@@ -26,6 +26,7 @@ namespace CloudDrive.Application.Services
         private readonly FileDeduplicationService _deduplicationService;
         private readonly FileUploadValidator _uploadValidator;
         private readonly QuotaService _quotaService;
+        private readonly IUnitOfWork _unitOfWork;
 
         public FileService(
             IFileRepository fileRepository,
@@ -35,7 +36,8 @@ namespace CloudDrive.Application.Services
             FileDeduplicationService deduplicationService,
             FileUploadValidator uploadValidator,
             QuotaService quotaService,
-            IMemoryCacheHelper memoryCacheHelper)
+            IMemoryCacheHelper memoryCacheHelper,
+            IUnitOfWork unitOfWork)
         {
             _fileRepository = fileRepository;
             _userRepository = userRepository;
@@ -45,6 +47,7 @@ namespace CloudDrive.Application.Services
             _uploadValidator = uploadValidator;
             _quotaService = quotaService;
             _memoryCacheHelper = memoryCacheHelper;
+            _unitOfWork = unitOfWork;
         }
 
         /// <inheritdoc />
@@ -86,6 +89,7 @@ namespace CloudDrive.Application.Services
                     user!.IncreaseUsedSpace(instantFile.Size.bytesize);
                     await _userRepository.UpdateAsync(user);
 
+                    await _unitOfWork.SaveChangesAsync();
                     return FileUploadResultDto.Ok(instantFile.Id, command.FileName, instantFile.Size.bytesize, isInstantUpload: true);
                 }
             }
@@ -110,6 +114,7 @@ namespace CloudDrive.Application.Services
             owner!.IncreaseUsedSpace(command.FileSize);
             await _userRepository.UpdateAsync(owner);
 
+            await _unitOfWork.SaveChangesAsync();
             return FileUploadResultDto.Ok(fileItem.Id, command.FileName, command.FileSize);
         }
 
@@ -138,6 +143,7 @@ namespace CloudDrive.Application.Services
             user!.IncreaseUsedSpace(instantFile.Size.bytesize);
             await _userRepository.UpdateAsync(user);
 
+            await _unitOfWork.SaveChangesAsync();
             return FileUploadResultDto.Ok(instantFile.Id, fileName, instantFile.Size.bytesize, isInstantUpload: true);
         }
 
@@ -158,6 +164,7 @@ namespace CloudDrive.Application.Services
             // 增加下载计数
             fileItem.IncrementDownloadCount();
             await _fileRepository.UpdateAsync(fileItem);
+            await _unitOfWork.SaveChangesAsync();
 
             return (stream, fileItem.Name, fileItem.MimeType);
         }
@@ -231,6 +238,7 @@ namespace CloudDrive.Application.Services
         {
             var folder = FileItem.CreateFolder(command.FolderName, command.OwnerId, command.ParentFolderId);
             await _fileRepository.AddAsync(folder);
+            await _unitOfWork.SaveChangesAsync();
 
             return MapToDto(folder);
         }
@@ -255,6 +263,8 @@ namespace CloudDrive.Application.Services
                 user!.DecreaseUsedSpace(fileItem.Size.bytesize);
                 await _userRepository.UpdateAsync(user);
             }
+
+            await _unitOfWork.SaveChangesAsync();
         }
 
         /// <inheritdoc />
@@ -268,6 +278,7 @@ namespace CloudDrive.Application.Services
 
             fileItem.Rename(command.NewName);
             await _fileRepository.UpdateAsync(fileItem);
+            await _unitOfWork.SaveChangesAsync();
 
             return MapToDto(fileItem);
         }
@@ -296,6 +307,7 @@ namespace CloudDrive.Application.Services
 
             fileItem.MoveTo(command.TargetFolderId);
             await _fileRepository.UpdateAsync(fileItem);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         /// <inheritdoc />
@@ -331,6 +343,7 @@ namespace CloudDrive.Application.Services
             user!.IncreaseUsedSpace(copy.Size.bytesize);
             await _userRepository.UpdateAsync(user);
 
+            await _unitOfWork.SaveChangesAsync();
             return MapToDto(copy);
         }
 
@@ -364,6 +377,7 @@ namespace CloudDrive.Application.Services
                 await _userRepository.UpdateAsync(user);
             }
 
+            await _unitOfWork.SaveChangesAsync();
             return ownedItems.Count;
         }
 
@@ -395,6 +409,7 @@ namespace CloudDrive.Application.Services
             FileItem.BatchMoveTo(ownedItems, command.TargetFolderId);
             await _fileRepository.UpdateRangeAsync(ownedItems);
 
+            await _unitOfWork.SaveChangesAsync();
             return ownedItems.Count;
         }
 
@@ -439,6 +454,7 @@ namespace CloudDrive.Application.Services
                 await _userRepository.UpdateAsync(user);
             }
 
+            await _unitOfWork.SaveChangesAsync();
             return MapToDto(fileItem);
         }
 
@@ -457,6 +473,7 @@ namespace CloudDrive.Application.Services
                 await _fileRepository.DeleteAsync(item);
             }
 
+            await _unitOfWork.SaveChangesAsync();
             return items.Count;
         }
 
@@ -479,6 +496,7 @@ namespace CloudDrive.Application.Services
                 command.ParentFolderId);
 
             await _chunkUploadRepository.AddAsync(session);
+            await _unitOfWork.SaveChangesAsync();
 
             return MapSessionToDto(session);
         }
@@ -502,6 +520,7 @@ namespace CloudDrive.Application.Services
             // 更新会话状态
             session.MarkChunkUploaded(command.ChunkIndex);
             await _chunkUploadRepository.UpdateAsync(session);
+            await _unitOfWork.SaveChangesAsync();
 
             return MapSessionToDto(session);
         }
@@ -569,6 +588,7 @@ namespace CloudDrive.Application.Services
             session.MarkCompleted();
             await _chunkUploadRepository.UpdateAsync(session);
 
+            await _unitOfWork.SaveChangesAsync();
             return FileUploadResultDto.Ok(fileItem.Id, session.FileName, session.TotalSize);
         }
 

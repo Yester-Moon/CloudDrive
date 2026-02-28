@@ -1,7 +1,7 @@
-namespace CloudDrive.Infrastructure.UnitOfWork
+namespace CloudDrive.Domain.Interfaces
 {
     /// <summary>
-    /// 工作单元接口
+    /// 工作单元接口 — 统一控制持久化时机
     /// </summary>
     public interface IUnitOfWork : IDisposable
     {

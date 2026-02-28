@@ -43,19 +43,18 @@ namespace CloudDrive.Infrastructure.Repositories
         public async Task AddAsync(ShareLink shareLink)
         {
             await _dbContext.ShareLinks.AddAsync(shareLink);
-            await _dbContext.SaveChangesAsync();
         }
 
-        public async Task UpdateAsync(ShareLink shareLink)
+        public Task UpdateAsync(ShareLink shareLink)
         {
             _dbContext.ShareLinks.Update(shareLink);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
 
-        public async Task DeleteAsync(ShareLink shareLink)
+        public Task DeleteAsync(ShareLink shareLink)
         {
             _dbContext.ShareLinks.Remove(shareLink);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
     }
 }

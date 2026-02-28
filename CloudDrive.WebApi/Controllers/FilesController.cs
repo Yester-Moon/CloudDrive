@@ -61,10 +61,10 @@ namespace CloudDrive.WebApi.Controllers
         }
 
         /// <summary>
-        /// 分片上传（秒传检测）
+        /// 秒传检测
         /// </summary>
-        [HttpPost("upload/chunk")]
-        public async Task<ActionResult<ApiResponse>> ChunkUpload([FromBody] ChunkUploadRequest request)
+        [HttpPost("upload/seconds")]
+        public async Task<ActionResult<ApiResponse>> SecondsUpload([FromBody] SecondsUploadRequest request)
         {
             var userId = GetCurrentUserId();
 
@@ -407,7 +407,7 @@ namespace CloudDrive.WebApi.Controllers
 
     #region Request Models
 
-    public class ChunkUploadRequest
+    public class SecondsUploadRequest
     {
         /// <summary>
         /// 文件哈希

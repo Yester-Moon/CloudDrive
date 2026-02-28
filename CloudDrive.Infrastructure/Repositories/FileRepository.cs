@@ -65,19 +65,18 @@ namespace CloudDrive.Infrastructure.Repositories
         public async Task AddAsync(FileItem fileItem)
         {
             await _dbContext.FileItems.AddAsync(fileItem);
-            await _dbContext.SaveChangesAsync();
         }
 
-        public async Task UpdateAsync(FileItem fileItem)
+        public Task UpdateAsync(FileItem fileItem)
         {
             _dbContext.FileItems.Update(fileItem);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
 
-        public async Task DeleteAsync(FileItem fileItem)
+        public Task DeleteAsync(FileItem fileItem)
         {
             _dbContext.FileItems.Remove(fileItem);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
 
         public async Task<(List<FileItem> Items, int TotalCount)> GetPagedAsync(
@@ -186,10 +185,10 @@ namespace CloudDrive.Infrastructure.Repositories
                 .FirstOrDefaultAsync(f => f.Id == id && f.IsDeleted);
         }
 
-        public async Task UpdateRangeAsync(IEnumerable<FileItem> fileItems)
+        public Task UpdateRangeAsync(IEnumerable<FileItem> fileItems)
         {
             _dbContext.FileItems.UpdateRange(fileItems);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
     }
 }

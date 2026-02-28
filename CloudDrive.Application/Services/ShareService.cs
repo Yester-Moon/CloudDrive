@@ -19,19 +19,22 @@ namespace CloudDrive.Application.Services
         private readonly IStorageProvider _storageProvider;
         private readonly IMemoryCacheHelper _memoryCacheHelper;
         private readonly ShareLinkAccessService _accessService;
+        private readonly IUnitOfWork _unitOfWork;
 
         public ShareService(
             IShareLinkRepository shareLinkRepository,
             IFileRepository fileRepository,
             IStorageProvider storageProvider,
             IMemoryCacheHelper memoryCacheHelper,
-            ShareLinkAccessService accessService)
+            ShareLinkAccessService accessService,
+            IUnitOfWork unitOfWork)
         {
             _shareLinkRepository = shareLinkRepository;
             _fileRepository = fileRepository;
             _storageProvider = storageProvider;
             _accessService = accessService;
             _memoryCacheHelper = memoryCacheHelper;
+            _unitOfWork = unitOfWork;
         }
 
         /// <inheritdoc />
@@ -57,6 +60,7 @@ namespace CloudDrive.Application.Services
                 command.AllowDownload);
 
             await _shareLinkRepository.AddAsync(shareLink);
+            await _unitOfWork.SaveChangesAsync();
 
             return MapToDto(shareLink, fileItem);
         }
@@ -72,6 +76,7 @@ namespace CloudDrive.Application.Services
             // 增加访问次数
             shareLink.IncrementViewCount();
             await _shareLinkRepository.UpdateAsync(shareLink);
+            await _unitOfWork.SaveChangesAsync();
 
             return MapToDto(shareLink, fileItem);
         }
@@ -129,6 +134,8 @@ namespace CloudDrive.Application.Services
             fileItem.IncrementDownloadCount();
             await _fileRepository.UpdateAsync(fileItem);
 
+            await _unitOfWork.SaveChangesAsync();
+
             var stream = await _storageProvider.DownloadAsync(fileItem.StoragePath);
 
             return (stream, fileItem.Name, fileItem.MimeType);
@@ -162,6 +169,7 @@ namespace CloudDrive.Application.Services
 
             shareLink.Cancel();
             await _shareLinkRepository.UpdateAsync(shareLink);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         /// <inheritdoc />

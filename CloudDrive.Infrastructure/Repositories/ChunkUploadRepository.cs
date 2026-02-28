@@ -21,19 +21,18 @@ namespace CloudDrive.Infrastructure.Repositories
         public async Task AddAsync(ChunkUploadSession session)
         {
             await _dbContext.ChunkUploadSessions.AddAsync(session);
-            await _dbContext.SaveChangesAsync();
         }
 
-        public async Task UpdateAsync(ChunkUploadSession session)
+        public Task UpdateAsync(ChunkUploadSession session)
         {
             _dbContext.ChunkUploadSessions.Update(session);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
 
-        public async Task DeleteAsync(ChunkUploadSession session)
+        public Task DeleteAsync(ChunkUploadSession session)
         {
             _dbContext.ChunkUploadSessions.Remove(session);
-            await _dbContext.SaveChangesAsync();
+            return Task.CompletedTask;
         }
 
         public async Task<List<ChunkUploadSession>> GetActiveByOwnerAsync(Guid ownerId)

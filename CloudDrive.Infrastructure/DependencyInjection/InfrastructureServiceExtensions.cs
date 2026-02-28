@@ -10,7 +10,6 @@ using CloudDrive.Infrastructure.EventHandlers;
 using CloudDrive.Infrastructure.Repositories;
 using CloudDrive.Infrastructure.Services;
 using CloudDrive.Infrastructure.Storage;
-using CloudDrive.Infrastructure.UnitOfWork;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -62,19 +61,26 @@ namespace CloudDrive.Infrastructure.DependencyInjection
             services.AddScoped<IChunkUploadRepository, ChunkUploadRepository>();
 
             // 工作单元
-            services.AddScoped<IUnitOfWork, UnitOfWork.UnitOfWork>();
+            services.AddScoped<Domain.Interfaces.IUnitOfWork, UnitOfWork.UnitOfWork>();
 
             // 存储提供者（根据配置选择）
             var storageProvider = configuration.GetSection(StorageOptions.SectionName)
                 .GetValue<string>("Provider") ?? "Local";
 
-            if (storageProvider.Equals("Oss", StringComparison.OrdinalIgnoreCase))
+            // 始终注册工厂（Hybrid 模式和手动获取指定层级都需要）
+            services.AddSingleton<IStorageProviderFactory, StorageProviderFactory>();
+
+            switch (storageProvider.ToLowerInvariant())
             {
-                services.AddScoped<IStorageProvider, OssStorageProvider>();
-            }
-            else
-            {
-                services.AddScoped<IStorageProvider, LocalStorageProvider>();
+                case "oss":
+                    services.AddSingleton<IStorageProvider, OssStorageProvider>();
+                    break;
+                case "hybrid":
+                    services.AddSingleton<IStorageProvider, HybridStorageProvider>();
+                    break;
+                default: // "local"
+                    services.AddSingleton<IStorageProvider, LocalStorageProvider>();
+                    break;
             }
 
             // 外部服务

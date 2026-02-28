@@ -34,7 +34,7 @@ namespace CloudDrive.WebApi.Validators
     /// <summary>
     /// 秒传检测请求验证器
     /// </summary>
-    public class ChunkUploadRequestValidator : AbstractValidator<ChunkUploadRequest>
+    public class ChunkUploadRequestValidator : AbstractValidator<SecondsUploadRequest>
     {
         public ChunkUploadRequestValidator()
         {

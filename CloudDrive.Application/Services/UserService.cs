@@ -3,6 +3,7 @@ using CloudDrive.Application.Interfaces;
 using CloudDrive.Common.Exceptions;
 using CloudDrive.Common.JWT;
 using CloudDrive.Domain.Entities;
+using CloudDrive.Domain.Interfaces;
 using CloudDrive.Domain.RepositoryInterfaces;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
@@ -19,19 +20,22 @@ namespace CloudDrive.Application.Services
         private readonly ITokenService _tokenService;
         private readonly JWTOptions _jwtOptions;
         private readonly QuotaService _quotaService;
+        private readonly IUnitOfWork _unitOfWork;
 
         public UserService(
             UserManager<User> userManager,
             IUserRepository userRepository,
             ITokenService tokenService,
             JWTOptions jwtOptions,
-            QuotaService quotaService)
+            QuotaService quotaService,
+            IUnitOfWork unitOfWork)
         {
             _userManager = userManager;
             _userRepository = userRepository;
             _tokenService = tokenService;
             _jwtOptions = jwtOptions;
             _quotaService = quotaService;
+            _unitOfWork = unitOfWork;
         }
 
         /// <inheritdoc />
@@ -77,6 +81,7 @@ namespace CloudDrive.Application.Services
             // 记录登录时间
             user.RecordLogin();
             await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
 
             // 生成Token
             var claims = new List<Claim>
@@ -108,6 +113,7 @@ namespace CloudDrive.Application.Services
 
             user.UpdateDisplayName(displayName);
             await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         /// <inheritdoc />
@@ -118,6 +124,7 @@ namespace CloudDrive.Application.Services
 
             user.UpdateAvatar(avatarUrl);
             await _userRepository.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
         }
 
         /// <inheritdoc />

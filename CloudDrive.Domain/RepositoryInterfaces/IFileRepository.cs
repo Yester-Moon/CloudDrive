@@ -111,5 +111,15 @@ namespace CloudDrive.Domain.RepositoryInterfaces
         /// 批量更新文件
         /// </summary>
         Task UpdateRangeAsync(IEnumerable<FileItem> fileItems);
+
+        /// <summary>
+        /// 获取已软删除且超过保留期的文件（用于后台永久清理）
+        /// </summary>
+        Task<List<FileItem>> GetExpiredDeletedFilesAsync(DateTime deletedBefore, int batchSize = 100);
+
+        /// <summary>
+        /// 获取所有用户的存储空间统计（userId → usedBytes）
+        /// </summary>
+        Task<Dictionary<Guid, long>> GetStorageStatsByOwnerAsync();
     }
 }

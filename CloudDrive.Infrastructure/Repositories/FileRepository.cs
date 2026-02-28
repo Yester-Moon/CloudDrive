@@ -190,5 +190,23 @@ namespace CloudDrive.Infrastructure.Repositories
             _dbContext.FileItems.UpdateRange(fileItems);
             return Task.CompletedTask;
         }
+
+        public async Task<List<FileItem>> GetExpiredDeletedFilesAsync(DateTime deletedBefore, int batchSize = 100)
+        {
+            return await _dbContext.FileItems
+                .IgnoreQueryFilters()
+                .Where(f => f.IsDeleted && f.DeletionTime.HasValue && f.DeletionTime.Value < deletedBefore)
+                .Take(batchSize)
+                .ToListAsync();
+        }
+
+        public async Task<Dictionary<Guid, long>> GetStorageStatsByOwnerAsync()
+        {
+            return await _dbContext.FileItems
+                .Where(f => !f.IsFolder)
+                .GroupBy(f => f.OwnerId)
+                .Select(g => new { OwnerId = g.Key, TotalBytes = g.Sum(f => f.Size.bytesize) })
+                .ToDictionaryAsync(x => x.OwnerId, x => x.TotalBytes);
+        }
     }
 }

@@ -1,12 +1,16 @@
 using CloudDrive.Application.Interfaces;
 using CloudDrive.Application.Services;
 using CloudDrive.Application.Validators;
+using CloudDrive.Common.AspNetCore;
+using CloudDrive.Common.Interfaces;
 using CloudDrive.Common.JWT;
 using FluentValidation;
 using CloudDrive.Domain.Entities;
 using CloudDrive.Domain.Interfaces;
 using CloudDrive.Domain.RepositoryInterfaces;
+using CloudDrive.Infrastructure.BackgroundJobs;
 using CloudDrive.Infrastructure.EventHandlers;
+using CloudDrive.Infrastructure.HealthChecks;
 using CloudDrive.Infrastructure.Repositories;
 using CloudDrive.Infrastructure.Services;
 using CloudDrive.Infrastructure.Storage;
@@ -14,6 +18,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Quartz;
 
 namespace CloudDrive.Infrastructure.DependencyInjection
 {
@@ -53,6 +58,10 @@ namespace CloudDrive.Infrastructure.DependencyInjection
             // 存储配置
             services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
             services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+
+            // 缓存
+            services.AddMemoryCache();
+            services.AddSingleton<IMemoryCacheHelper, MemoryCacheHelper>();
 
             // 仓储
             services.AddScoped<IFileRepository, FileRepository>();
@@ -101,6 +110,41 @@ namespace CloudDrive.Infrastructure.DependencyInjection
             services.AddSingleton(jwtOptions);
             services.AddSingleton<ITokenService, TokenService>();
             services.AddJWTAuthentication(jwtOptions);
+
+            // Quartz 后台任务
+            services.AddQuartz(q =>
+            {
+                // 过期分享清理 — 每小时执行
+                var shareCleanupKey = new JobKey("ExpiredShareCleanup");
+                q.AddJob<ExpiredShareCleanupJob>(opts => opts.WithIdentity(shareCleanupKey));
+                q.AddTrigger(opts => opts
+                    .ForJob(shareCleanupKey)
+                    .WithIdentity("ExpiredShareCleanup-Trigger")
+                    .WithCronSchedule("0 0 * * * ?"));  // 每小时整点
+
+                // 过期文件永久清理 — 每天凌晨 2 点
+                var fileCleanupKey = new JobKey("ExpiredFileCleanup");
+                q.AddJob<ExpiredFileCleanupJob>(opts => opts.WithIdentity(fileCleanupKey));
+                q.AddTrigger(opts => opts
+                    .ForJob(fileCleanupKey)
+                    .WithIdentity("ExpiredFileCleanup-Trigger")
+                    .WithCronSchedule("0 0 2 * * ?"));  // 每天 02:00
+
+                // 存储空间统计同步 — 每天凌晨 3 点
+                var statsSyncKey = new JobKey("StorageStatsSync");
+                q.AddJob<StorageStatsSyncJob>(opts => opts.WithIdentity(statsSyncKey));
+                q.AddTrigger(opts => opts
+                    .ForJob(statsSyncKey)
+                    .WithIdentity("StorageStatsSync-Trigger")
+                    .WithCronSchedule("0 0 3 * * ?"));  // 每天 03:00
+            });
+            services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
+
+            // 健康检查
+            services.AddHealthChecks()
+                .AddCheck<StorageHealthCheck>(
+                    "storage",
+                    tags: ["storage"]);
 
             return services;
         }

@@ -41,5 +41,15 @@ namespace CloudDrive.Domain.RepositoryInterfaces
         /// 删除分享链接
         /// </summary>
         Task DeleteAsync(ShareLink shareLink);
+
+        /// <summary>
+        /// 获取所有已过期且未取消的分享链接
+        /// </summary>
+        Task<List<ShareLink>> GetExpiredActiveLinksAsync(int batchSize = 100);
+
+        /// <summary>
+        /// 批量更新分享链接
+        /// </summary>
+        Task UpdateRangeAsync(IEnumerable<ShareLink> shareLinks);
     }
 }

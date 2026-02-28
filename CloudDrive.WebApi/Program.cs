@@ -4,8 +4,57 @@ using CloudDrive.WebApi.Middleware;
 using CloudDrive.WebApi.Validators;
 using FluentValidation;
 using Microsoft.OpenApi.Models;
+using Serilog;
+using Serilog.Events;
+using Serilog.Sinks.Elasticsearch;
+
+// === Bootstrap Serilog（在 Host 构建之前就能捕获启动异常） ===
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
+
+try
+{
 
 var builder = WebApplication.CreateBuilder(args);
+
+// 用 Serilog 完全替换默认日志
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .WriteTo.Console()
+        .WriteTo.File(
+            path: "logs/clouddrive-.log",
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 30,
+            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext}{NewLine}  {Message:lj}{NewLine}{Exception}");
+
+    // Seq（可选，仅配置了 ServerUrl 时启用）
+    var seqUrl = context.Configuration["Serilog:Seq:ServerUrl"];
+    if (!string.IsNullOrWhiteSpace(seqUrl))
+    {
+        configuration.WriteTo.Seq(seqUrl);
+    }
+
+    // Elasticsearch（可选，仅配置了 NodeUris 时启用）
+    var esUri = context.Configuration["Serilog:Elasticsearch:NodeUris"];
+    if (!string.IsNullOrWhiteSpace(esUri))
+    {
+        configuration.WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(esUri))
+        {
+            AutoRegisterTemplate = true,
+            IndexFormat = "clouddrive-logs-{0:yyyy.MM.dd}",
+            MinimumLogEventLevel = LogEventLevel.Information
+        });
+    }
+});
 
 // === Services Registration ===
 
@@ -72,6 +121,11 @@ builder.Services.AddSwaggerGen(options =>
 // Infrastructure services (DbContext, Identity, repos, storage, JWT, MediatR, etc.)
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
+// 数据库健康检查（SqlServer HealthChecks 在 WebApi 层注册以避免与 EF Core 冲突）
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+builder.Services.AddHealthChecks()
+    .AddSqlServer(connectionString, name: "dbHealthCheck", tags: ["db", "sql"]);
+
 // Application services (FileService, UserService, ShareService, etc.)
 builder.Services.AddApplicationServices();
 
@@ -92,6 +146,17 @@ var app = builder.Build();
 
 // Global exception handler (first in pipeline)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// Serilog 结构化请求日志（替代 RequestLoggingMiddleware 或与之共存）
+app.UseSerilogRequestLogging(options =>
+{
+    options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000}ms";
+    options.GetLevel = (httpContext, elapsed, ex) =>
+        ex != null ? LogEventLevel.Error
+        : httpContext.Response.StatusCode >= 500 ? LogEventLevel.Error
+        : elapsed > 3000 ? LogEventLevel.Warning
+        : LogEventLevel.Information;
+});
 
 // Request logging
 app.UseMiddleware<RequestLoggingMiddleware>();
@@ -114,4 +179,17 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// 健康检查端点
+app.MapHealthChecks("/health");
+
 app.Run();
+
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "应用程序启动失败");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

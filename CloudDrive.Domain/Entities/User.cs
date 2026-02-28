@@ -206,6 +206,14 @@ namespace CloudDrive.Domain.Entities
         }
 
         /// <summary>
+        /// 同步已使用空间（后台任务修正漂移，直接设置为实际值）
+        /// </summary>
+        public void SyncUsedSpace(long actualBytes)
+        {
+            UsedSpace = Math.Max(0, actualBytes);
+        }
+
+        /// <summary>
         /// 升级VIP
         /// </summary>
         public void UpgradeVip(int newVipLevel, DateTime? expirationTime = null)

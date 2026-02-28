@@ -1,0 +1,58 @@
+version: "3.8"
+
+services:
+  # ============================
+  # SQL Server 2022
+  # ============================
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: clouddrive-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "CloudDrive@2024!"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "CloudDrive@2024!" -C -Q "SELECT 1" -b
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - clouddrive-net
+
+  # ============================
+  # CloudDrive WebApi
+  # ============================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clouddrive-app
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Docker
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=CloudDriveDb;User Id=sa;Password=CloudDrive@2024!;TrustServerCertificate=True;
+      - Storage__Provider=Local
+      - Storage__LocalStoragePath=/app/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - app-uploads:/app/uploads
+      - app-logs:/app/logs
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - clouddrive-net
+
+volumes:
+  sqlserver-data:
+  app-uploads:
+  app-logs:
+
+networks:
+  clouddrive-net:
+    driver: bridge

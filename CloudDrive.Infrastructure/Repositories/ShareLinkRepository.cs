@@ -56,5 +56,21 @@ namespace CloudDrive.Infrastructure.Repositories
             _dbContext.ShareLinks.Remove(shareLink);
             return Task.CompletedTask;
         }
+
+        public async Task<List<ShareLink>> GetExpiredActiveLinksAsync(int batchSize = 100)
+        {
+            return await _dbContext.ShareLinks
+                .Where(s => !s.IsCancelled
+                    && s.ExpirationTime.HasValue
+                    && s.ExpirationTime.Value < DateTime.Now)
+                .Take(batchSize)
+                .ToListAsync();
+        }
+
+        public Task UpdateRangeAsync(IEnumerable<ShareLink> shareLinks)
+        {
+            _dbContext.ShareLinks.UpdateRange(shareLinks);
+            return Task.CompletedTask;
+        }
     }
 }

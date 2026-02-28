@@ -1,17 +1,27 @@
 using CloudDrive.Infrastructure.DependencyInjection;
+using CloudDrive.WebApi.Filters;
 using CloudDrive.WebApi.Middleware;
+using CloudDrive.WebApi.Validators;
+using FluentValidation;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // === Services Registration ===
 
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+    {
+        // 全局验证过滤器 — 自动对 [FromBody] 参数执行 FluentValidation
+        options.Filters.Add<ValidationActionFilter>();
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     });
+
+// FluentValidation — 注册 WebApi 层请求模型验证器
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
 
 builder.Services.AddEndpointsApiExplorer();
 

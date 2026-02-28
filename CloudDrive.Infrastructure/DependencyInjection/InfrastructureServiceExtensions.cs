@@ -2,6 +2,7 @@ using CloudDrive.Application.Interfaces;
 using CloudDrive.Application.Services;
 using CloudDrive.Application.Validators;
 using CloudDrive.Common.JWT;
+using FluentValidation;
 using CloudDrive.Domain.Entities;
 using CloudDrive.Domain.Interfaces;
 using CloudDrive.Domain.RepositoryInterfaces;
@@ -110,6 +111,9 @@ namespace CloudDrive.Infrastructure.DependencyInjection
             services.AddScoped<IFileService, FileService>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<IShareService, ShareService>();
+
+            // FluentValidation — 自动注册 Application 层所有 AbstractValidator<T>
+            services.AddValidatorsFromAssembly(typeof(UploadFileCommandValidator).Assembly);
 
             return services;
         }

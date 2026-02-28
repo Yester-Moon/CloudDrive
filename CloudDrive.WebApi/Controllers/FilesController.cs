@@ -226,7 +226,7 @@ namespace CloudDrive.WebApi.Controllers
             });
             return Ok(ApiResponse.Ok(result, "文件夹创建成功"));
         }
-
+        #region 回收站
         /// <summary>
         /// 获取回收站文件列表
         /// </summary>
@@ -265,7 +265,9 @@ namespace CloudDrive.WebApi.Controllers
             var count = await _fileService.EmptyTrashAsync(userId);
             return Ok(ApiResponse.Ok(new { deletedCount = count }, $"已永久删除 {count} 个文件"));
         }
+        #endregion
 
+        #region 批量处理
         /// <summary>
         /// 批量删除文件
         /// </summary>
@@ -303,6 +305,7 @@ namespace CloudDrive.WebApi.Controllers
             return claim != null ? Guid.Parse(claim.Value) : Guid.Empty;
         }
     }
+        #endregion
 
     #region Request Models
 
